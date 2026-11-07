@@ -1,0 +1,39 @@
+name: netromance
+services:
+  web:
+    build: .
+    restart: unless-stopped
+    ports:
+      - "0.0.0.0:${APP_PORT:-3210}:3000"
+    environment:
+      DATABASE_URL: postgresql://xinyu:${POSTGRES_PASSWORD:?Run npm run deploy to generate configuration}@db:5432/xinyu
+      COOKIE_SECURE: ${COOKIE_SECURE:-false}
+      TURN_URL: ${TURN_URL:-}
+      TURN_USERNAME: ${TURN_USERNAME:-}
+      TURN_CREDENTIAL: ${TURN_CREDENTIAL:-}
+      INVITE_BASE_URL: ${INVITE_BASE_URL:-}
+    depends_on:
+      db:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3000/api/health').then(r=>{if(!r.ok)process.exit(1)}).catch(()=>process.exit(1))"]
+      interval: 20s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+  db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: xinyu
+      POSTGRES_USER: xinyu
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Run npm run deploy to generate configuration}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U xinyu -d xinyu"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+volumes:
+  postgres_data:

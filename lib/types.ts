@@ -1,0 +1,10 @@
+export type Profile = {id:string;name:string;age:number;gender:'male'|'female';city:string;occupation:string;bio:string;interests:string[];photos:string[]};
+export type User = Profile & {email:string};
+export type RoomMode = '男生专场'|'女生专场';
+export type Room = {id:string;title:string;description:string;city:string;category:string;mode:RoomMode;cover:string;host_id:string|null;host_name:string|null;capacity:4|6;stage:number;round:number;occupancy:number;created_at:string};
+export type Participant = Profile & {role:'host'|'guest';muted:boolean;lamp:boolean;audio_enabled:boolean;video_enabled:boolean;joined_at:string};
+export type ChatMessage = {id:string;user_id:string;name:string;body:string;created_at:string};
+export type Signal = {id:string;sender_id:string;payload:{description?:RTCSessionDescriptionInit;candidate?:RTCIceCandidateInit}};
+export type Match = {id:string;room_title:string;created_at:string;partner:Profile};
+export type RoomState = {room:Room;participants:Participant[];messages:ChatMessage[];signals:Signal[];signalCursor:string;choice:string|null;matches:Match[];reports:{id:string;reason:string;name:string;created_at:string}[]};
+export const STAGES = ['等待相遇','初次心动','深入了解','双向奔赴','本场结束'];
