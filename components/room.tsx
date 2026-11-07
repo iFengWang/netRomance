@@ -11,6 +11,7 @@ import {api,post} from '@/lib/client';
 import {RoomRTC} from '@/lib/rtc';
 import {STAGES,type Participant,type Profile,type Room,type RoomState} from '@/lib/types';
 import {useApp} from './app-provider';
+import {LanguageMenu,useI18n} from './i18n';
 import {ProfileModal} from './matches';
 import {Avatar,Empty,Modal,Rules} from './ui';
 
@@ -81,6 +82,7 @@ export function RoomPage({id}:{id:string}){
 
 function LiveRoom({id,onLeave}:{id:string;onLeave:()=>void}){
  const {user,toast}=useApp();
+ const {t}=useI18n();
  const [state,setState]=useState<RoomState|null>(null);
  const [error,setError]=useState('');
  const [busy,setBusy]=useState(false);
@@ -237,12 +239,12 @@ function LiveRoom({id,onLeave}:{id:string;onLeave:()=>void}){
    const url=baseUrl.replace(/\/$/,'')+location.pathname;setInviteUrl(url);
    const {toDataURL}=await import('qrcode');
    setQrCode(await toDataURL(url,{width:260,margin:1,errorCorrectionLevel:'M',color:{dark:'#633448',light:'#ffffffff'}}));
-  }catch(e){setInviteUrl(location.href);toast((e as Error).message||'二维码生成失败，请复制房间链接');}
+  }catch(e){setInviteUrl(location.href);toast((e as Error).message||t('qrFail'));}
  }
 
  async function copy(){
-  try{await navigator.clipboard.writeText(inviteUrl||location.href);toast('房间链接已复制，邀请朋友来相遇吧。');}
-  catch{toast('复制失败，请直接复制浏览器地址栏中的房间链接。');}
+  try{await navigator.clipboard.writeText(inviteUrl||location.href);toast(t('copied'));}
+  catch{toast(t('copyFail'));}
  }
 
  async function toggleFullscreen(){
@@ -253,7 +255,7 @@ function LiveRoom({id,onLeave}:{id:string;onLeave:()=>void}){
   }catch{toast('无法切换全屏，请检查浏览器权限');}
  }
 
- if(!state)return <div className="page"><div className="skeleton"/>{error&&<p className="error">{error}</p>}<button className="text-button" onClick={onLeave}>返回房间入口</button></div>;
+ if(!state)return <div className="page"><div className="skeleton"/>{error&&<p className="error">{error}</p>}<button className="text-button" onClick={onLeave}>{t('returnEntry')}</button></div>;
 
  const guests=state.participants.filter(person=>person.role==='guest');
  const featuredGender:'male'|'female'=state.room.mode==='男生专场'?'male':'female';
@@ -266,7 +268,7 @@ function LiveRoom({id,onLeave}:{id:string;onLeave:()=>void}){
   gender:index===0?featuredGender:supportingGender,
   person:index===0?featured:supporting[index-1],
  }));
- const stageAction=state.room.stage===0?'开始相亲':state.room.stage===3?'公布牵手结果':state.room.stage===4?'开启下一场':'进入'+STAGES[state.room.stage+1];
+ const stageAction=state.room.stage===0?t('start'):state.room.stage===3?t('results'):state.room.stage===4?t('nextRound'):t('enter',{stage:STAGES[state.room.stage+1]});
  const displayStage=Math.min(Math.max(state.room.stage,1),3);
 
  return <div className="page live-page">
@@ -275,25 +277,26 @@ function LiveRoom({id,onLeave}:{id:string;onLeave:()=>void}){
     <div className="theater-shell" ref={theaterRef}>
      <header className="theater-header">
       <div className="theater-primary">
-       <button className="room-menu-toggle" onClick={()=>window.dispatchEvent(new Event('xinyu:toggle-sidebar'))} aria-label="切换左侧菜单" title="MENU"><Menu size={18}/></button>
-       <div className="room-summary"><strong>{state.room.title}</strong><small><MapPin size={11}/>{state.room.city} · {state.room.mode} · {guests.length}/{state.room.capacity} 嘉宾 · 第 {state.room.round} 场</small></div>
+       <button className="room-menu-toggle" onClick={()=>window.dispatchEvent(new Event('xinyu:toggle-sidebar'))} aria-label="MENU" title="MENU"><Menu size={18}/></button>
+       <div className="room-summary"><strong>{state.room.title}</strong><small><MapPin size={11}/>{state.room.city} · {state.room.mode} · {guests.length}/{state.room.capacity} {t('guests')} · {t('round',{round:state.room.round})}</small></div>
        <div className="moderator-menu-wrap" ref={hostMenuRef}>
-        {host?<button className="moderator-identity" onClick={()=>setHostMenuOpen(value=>!value)} aria-expanded={hostMenuOpen} aria-haspopup="menu" aria-label="打开主持人控制菜单"><Avatar name={moderator?.name??state.room.host_name??'主持人'} photo={moderator?.photos[0]}/><span><small>本场主持人</small><strong>{moderator?.name??state.room.host_name??'等待主持人'}</strong></span><i className={moderator?'online':''}/><ChevronDown size={13}/></button>:<div className="moderator-identity"><Avatar name={moderator?.name??state.room.host_name??'主持人'} photo={moderator?.photos[0]}/><span><small>本场主持人</small><strong>{moderator?.name??state.room.host_name??'等待主持人'}</strong></span><i className={moderator?'online':''}/></div>}
+        {host?<button className="moderator-identity" onClick={()=>setHostMenuOpen(value=>!value)} aria-expanded={hostMenuOpen} aria-haspopup="menu" aria-label={t('host')}><Avatar name={moderator?.name??state.room.host_name??t('host')} photo={moderator?.photos[0]}/><span><small>{t('host')}</small><strong>{moderator?.name??state.room.host_name??t('waitingHost')}</strong></span><i className={moderator?'online':''}/><ChevronDown size={13}/></button>:<div className="moderator-identity"><Avatar name={moderator?.name??state.room.host_name??t('host')} photo={moderator?.photos[0]}/><span><small>{t('host')}</small><strong>{moderator?.name??state.room.host_name??t('waitingHost')}</strong></span><i className={moderator?'online':''}/></div>}
         {host&&hostMenuOpen&&<div className="host-control-menu" role="menu">
-         <button role="menuitem" onClick={()=>{toggle('audio');setHostMenuOpen(false);}}>{mic?<MicOff size={16}/>:<Mic size={16}/>}<span>{mic?'关闭主持人麦克风':'开启主持人麦克风'}</span></button>
+         <button role="menuitem" onClick={()=>{toggle('audio');setHostMenuOpen(false);}}>{mic?<MicOff size={16}/>:<Mic size={16}/>}<span>{mic?t('hostMicOff'):t('hostMicOn')}</span></button>
          <button role="menuitem" disabled={busy} onClick={()=>{void act('stage',{expected:state.room.stage});setHostMenuOpen(false);}}><HeartHandshake size={16}/><span>{stageAction}</span></button>
          <hr/>
-         {anyGuestAudioOn?<button role="menuitem" disabled={!guests.length} onClick={()=>{void act('media-all',{kind:'audio',enabled:false});setHostMenuOpen(false);}}><MicOff size={16}/><span>全部关麦</span><small>主持人除外</small></button>:<button role="menuitem" disabled={!guests.length} onClick={()=>{void act('media-all',{kind:'audio',enabled:true});setHostMenuOpen(false);}}><Mic size={16}/><span>全部开启麦克风</span></button>}
-         {anyGuestVideoOn?<button role="menuitem" disabled={!guests.length} onClick={()=>{void act('media-all',{kind:'video',enabled:false});setHostMenuOpen(false);}}><VideoOff size={16}/><span>全部关闭视频</span></button>:<button role="menuitem" disabled={!guests.length} onClick={()=>{void act('media-all',{kind:'video',enabled:true});setHostMenuOpen(false);}}><Video size={16}/><span>全部开启视频</span></button>}
+         {anyGuestAudioOn?<button role="menuitem" disabled={!guests.length} onClick={()=>{void act('media-all',{kind:'audio',enabled:false});setHostMenuOpen(false);}}><MicOff size={16}/><span>{t('muteAll')}</span><small>{t('hostExcept')}</small></button>:<button role="menuitem" disabled={!guests.length} onClick={()=>{void act('media-all',{kind:'audio',enabled:true});setHostMenuOpen(false);}}><Mic size={16}/><span>{t('unmuteAll')}</span></button>}
+         {anyGuestVideoOn?<button role="menuitem" disabled={!guests.length} onClick={()=>{void act('media-all',{kind:'video',enabled:false});setHostMenuOpen(false);}}><VideoOff size={16}/><span>{t('cameraAllOff')}</span></button>:<button role="menuitem" disabled={!guests.length} onClick={()=>{void act('media-all',{kind:'video',enabled:true});setHostMenuOpen(false);}}><Video size={16}/><span>{t('cameraAllOn')}</span></button>}
         </div>}
        </div>
-       <div className="header-stage-progress">{[1,2,3].map(n=><div key={n} className={(state.room.stage>n?'complete ':'')+(displayStage===n?'current':'')}><span>{state.room.stage>n?<Check size={11}/>:n}</span><section><strong>{STAGES[n]}</strong><small>{['爱之初体验','爱之再判断','爱之终抉择'][n-1]}</small></section></div>)}</div>
+       <div className="header-stage-progress">{[1,2,3].map(n=><div key={n} className={(state.room.stage>n?'complete ':'')+(displayStage===n?'current':'')}><span>{state.room.stage>n?<Check size={11}/>:n}</span><section><strong>{[t('initial'),t('deeper'),t('together')][n-1]}</strong><small>{[t('initialSub'),t('deeperSub'),t('togetherSub')][n-1]}</small></section></div>)}</div>
        {(mediaBusy||mediaError||error)&&<div className={'header-feedback '+(mediaError||error?'error-text':'')} title={mediaError||error||'正在等待设备授权'}>{mediaBusy?<LoaderCircle size={13} className="spin"/>:<ShieldCheck size={13}/>}<span>{mediaError||error||'设备授权中'}</span></div>}
        <div className="theater-actions">
-        <button onClick={()=>void openInvite()} aria-label="邀请朋友并生成二维码" title="邀请朋友"><QrCode size={18}/></button>
-        <button onClick={()=>setChatOpen(value=>!value)} aria-pressed={chatOpen} aria-label={chatOpen?'隐藏聊天室':'显示聊天室'} title={chatOpen?'隐藏聊天室':'显示聊天室'}><MessageCircle size={18}/>{state.messages.length>0&&<b>{state.messages.length}</b>}</button>
-        <button onClick={toggleFullscreen} aria-label={fullscreen?'退出全屏':'全屏显示'} title={fullscreen?'退出全屏':'全屏显示'}>{fullscreen?<Minimize2 size={18}/>:<Maximize2 size={18}/>}</button>
-        <button onClick={onLeave} aria-label="退出房间" title="退出房间" className="leave-action"><LogOut size={20} strokeWidth={2.25}/></button>
+        <LanguageMenu className="room-language"/>
+        <button onClick={()=>void openInvite()} aria-label={t('invite')} title={t('invite')}><QrCode size={18}/></button>
+        <button onClick={()=>setChatOpen(value=>!value)} aria-pressed={chatOpen} aria-label={chatOpen?t('hideChat'):t('showChat')} title={chatOpen?t('hideChat'):t('showChat')}><MessageCircle size={18}/>{state.messages.length>0&&<b>{state.messages.length}</b>}</button>
+        <button onClick={toggleFullscreen} aria-label={fullscreen?t('exitFullscreen'):t('fullscreen')} title={fullscreen?t('exitFullscreen'):t('fullscreen')}>{fullscreen?<Minimize2 size={18}/>:<Maximize2 size={18}/>}</button>
+        <button onClick={onLeave} aria-label={t('leaveRoom')} title={t('leaveRoom')} className="leave-action"><LogOut size={20} strokeWidth={2.25}/></button>
        </div>
       </div>
      </header>
@@ -325,29 +328,30 @@ function LiveRoom({id,onLeave}:{id:string;onLeave:()=>void}){
 
 function VideoTile({person,self,stream,camera,mic,status,slotClass,expanded,onExpand,onProfile,showLamp,onLamp,onAudio,onVideo,lampBusy,canChoose,chosen,onChoose,onReport,onKick}:{person:Participant;self:boolean;stream?:MediaStream|null;camera?:boolean;mic?:boolean;status?:string;slotClass:string;expanded:boolean;onExpand:()=>void;onProfile:()=>void;showLamp:boolean;onLamp?:()=>void;onAudio?:()=>void;onVideo?:()=>void;lampBusy:boolean;canChoose:boolean;chosen:boolean;onChoose:()=>void;onReport:()=>void;onKick?:()=>void}){
  const video=useRef<HTMLVideoElement>(null);const [playError,setPlayError]=useState(false);
+ const {t}=useI18n();
  const audioOn=!person.muted&&(self?!!mic:person.audio_enabled);const videoOn=!person.muted&&(self?!!camera:person.video_enabled);
  useEffect(()=>{if(video.current){video.current.srcObject=stream??null;if(stream)video.current.play().catch(()=>setPlayError(true));}},[stream]);
  return <article className={'video-tile '+slotClass+(chosen?' chosen':'')+(expanded?' tile-viewport-expanded':'')} onDoubleClick={event=>{if(!(event.target as Element).closest('button'))onExpand();}} title={expanded?'双击恢复窗格':'双击全屏显示'}>
   <video ref={video} autoPlay playsInline muted={self||person.muted} className={(self&&!camera||person.muted?'video-hidden':'')+(self?' mirrored':'')}/>
   {(!stream||(self&&!camera)||person.muted)&&<div className="video-identity"><Avatar name={person.name} photo={person.photos[0]} size="large"/><p>{person.muted?'发言已暂停':self?'准备好时，开启摄像头':status==='failed'?'连接未成功':status==='connected'?'已连接 · 等待对方开启视频':'等待音视频连接'}</p></div>}
-  {showLamp&&<button className={'tile-lamp '+(person.lamp?'lamp-on':'lamp-off')} onClick={onLamp} disabled={!onLamp||lampBusy} aria-label={onLamp?(person.lamp?'关闭'+person.name+'的心动灯':'点亮'+person.name+'的心动灯'):(person.lamp?'心动灯已亮':'心动灯已熄')} title={person.lamp?'心动灯已亮':'心动灯已熄'}><img src="/images/lamp-3d.png" alt=""/></button>}
-  <div className="tile-top"><div>{!self&&<button className="tile-icon" onClick={onReport} aria-label={'举报'+person.name} title="举报"><Flag size={13}/></button>}</div></div>
-  <div className="tile-bottom"><button className="tile-person-button" onClick={onProfile} aria-label={'查看'+person.name+'的个人信息'} title="查看个人信息"><span className={'gender-icon '+person.gender}>{person.gender==='male'?<MaleSilhouetteIcon/>:<FemaleSilhouetteIcon/>}</span><span><strong>{person.name}{self?' · 我':''}</strong><small>{person.age}岁 · {person.city}</small></span></button><div className="tile-actions"><button className={audioOn?'media-on':''} onClick={onAudio} disabled={!onAudio||lampBusy} aria-label={(audioOn?'关闭':'开启')+person.name+'的麦克风'} title={audioOn?'麦克风已开':'麦克风已关'}>{audioOn?<Mic size={15}/>:<MicOff size={15}/>}</button><button className={videoOn?'media-on':''} onClick={onVideo} disabled={!onVideo||lampBusy} aria-label={(videoOn?'关闭':'开启')+person.name+'的视频'} title={videoOn?'视频已开':'视频已关'}>{videoOn?<Video size={15}/>:<VideoOff size={15}/>}</button>{onKick&&<button className="kick-action" onClick={onKick} aria-label={'踢出'+person.name} title="踢出房间"><KickGuestIcon/></button>}</div></div>
-  {canChoose&&<button className={'choose-button '+(chosen?'chosen':'')} onClick={onChoose} aria-label={chosen?'取消选择'+person.name:'选择'+person.name} title={chosen?'已选择 TA':'选择 TA'}><Heart size={15} fill={chosen?'currentColor':'none'}/></button>}
+  {showLamp&&<button className={'tile-lamp '+(person.lamp?'lamp-on':'lamp-off')} onClick={onLamp} disabled={!onLamp||lampBusy} aria-label={person.lamp?t('lampOn'):t('lampOff')} title={person.lamp?t('lampOn'):t('lampOff')}><img src="/images/lamp-3d.png" alt=""/></button>}
+  <div className="tile-top"><div>{!self&&<button className="tile-icon" onClick={onReport} aria-label={t('report')} title={t('report')}><Flag size={13}/></button>}</div></div>
+  <div className="tile-bottom"><button className="tile-person-button" onClick={onProfile} aria-label={t('profileInfo')} title={t('profileInfo')}><span className={'gender-icon '+person.gender}>{person.gender==='male'?<MaleSilhouetteIcon/>:<FemaleSilhouetteIcon/>}</span><span><strong>{person.name}{self?' · 我':''}</strong><small>{person.age}岁 · {person.city}</small></span></button><div className="tile-actions"><button className={audioOn?'media-on':''} onClick={onAudio} disabled={!onAudio||lampBusy} aria-label={(audioOn?'Off ':'On ')+person.name+' mic'} title={audioOn?'Mic on':'Mic off'}>{audioOn?<Mic size={15}/>:<MicOff size={15}/>}</button><button className={videoOn?'media-on':''} onClick={onVideo} disabled={!onVideo||lampBusy} aria-label={(videoOn?'Off ':'On ')+person.name+' video'} title={videoOn?'Video on':'Video off'}>{videoOn?<Video size={15}/>:<VideoOff size={15}/>}</button>{onKick&&<button className="kick-action" onClick={onKick} aria-label={'Kick '+person.name} title="Kick"><KickGuestIcon/></button>}</div></div>
+  {canChoose&&<button className={'choose-button '+(chosen?'chosen':'')} onClick={onChoose} aria-label={chosen?t('unselect'):t('select')} title={chosen?t('unselect'):t('select')}><Heart size={15} fill={chosen?'currentColor':'none'}/></button>}
   {playError&&<button className="play-audio" onClick={()=>video.current?.play().then(()=>setPlayError(false)).catch(()=>{})}>点击播放音视频</button>}
  </article>;
 }
 
 function VideoPlaceholder({gender,slotClass,showLamp,expanded,onExpand}:{gender:'male'|'female';slotClass:string;showLamp:boolean;expanded:boolean;onExpand:()=>void}){
- return <div className={'video-placeholder '+slotClass+(expanded?' tile-viewport-expanded':'')} onDoubleClick={event=>{if(!(event.target as Element).closest('button'))onExpand();}} title={expanded?'双击恢复窗格':'双击全屏显示'}>{showLamp&&<button className="tile-lamp lamp-off" disabled aria-label="暂无心动灯状态"><img src="/images/lamp-3d.png" alt=""/></button>}<span><UserRound size={24}/></span><p>等待{gender==='male'?'男':'女'}嘉宾入座</p><small>把下一次心动，留给未知</small><div className="placeholder-actions"><button disabled aria-label="暂无麦克风状态"><MicOff size={14}/></button><button disabled aria-label="暂无视频状态"><VideoOff size={14}/></button></div></div>;
+ const {t}=useI18n();return <div className={'video-placeholder '+slotClass+(expanded?' tile-viewport-expanded':'')} onDoubleClick={event=>{if(!(event.target as Element).closest('button'))onExpand();}} title={expanded?'Restore tile':'Expand tile'}>{showLamp&&<button className="tile-lamp lamp-off" disabled aria-label={t('lampOff')}><img src="/images/lamp-3d.png" alt=""/></button>}<span><UserRound size={24}/></span><p>{t('waiting',{gender:t(gender)})}</p><small>{t('unknown')}</small><div className="placeholder-actions"><button disabled aria-label="Mic unavailable"><MicOff size={14}/></button><button disabled aria-label="Video unavailable"><VideoOff size={14}/></button></div></div>;
 }
 
 function InviteModal({url,qrCode,onCopy,onClose}:{url:string;qrCode:string;onCopy:()=>void;onClose:()=>void}){
- return <Modal title="邀请朋友加入" onClose={onClose}><div className="invite-panel"><div className="invite-qr">{qrCode?<img src={qrCode} alt="房间邀请二维码"/>:<LoaderCircle size={28} className="spin"/>}</div><p>使用手机扫码，直接进入这场相遇</p><code>{url||'正在生成局域网邀请地址…'}</code><button className="button primary full" disabled={!url} onClick={onCopy}><Copy size={16}/>复制房间链接</button></div></Modal>;
+ const {t}=useI18n();return <Modal title={t('inviteTitle')} onClose={onClose}><div className="invite-panel"><div className="invite-qr">{qrCode?<img src={qrCode} alt="Room invitation QR code"/>:<LoaderCircle size={28} className="spin"/>}</div><p>{t('scan')}</p><code>{url||'…'}</code><button className="button primary full" disabled={!url} onClick={onCopy}><Copy size={16}/>{t('copy')}</button></div></Modal>;
 }
 
 function ChatPanel({state,userId,muted,value,busy,bottom,onChange,onSubmit}:{state:RoomState;userId:string;muted:boolean;value:string;busy:boolean;bottom:RefObject<HTMLDivElement|null>;onChange:(value:string)=>void;onSubmit:(e:FormEvent)=>void}){
- return <aside className="chat-panel"><div className="chat-header"><h2>相遇聊天室</h2><span>{state.participants.length} 人在线</span></div><div className="chat-messages"><div className="chat-welcome"><Heart size={21}/><p>欢迎来到这场相遇</p><small>一句友好的问候，<br/>就是故事最好的开场。</small></div>{state.messages.map(message=><div className={'chat-message '+(message.user_id===userId?'own':'')} key={message.id}><span>{message.name}<small>{new Date(message.created_at).toLocaleTimeString('zh-CN',{hour:'2-digit',minute:'2-digit'})}</small></span><p>{message.body}</p></div>)}<div ref={bottom}/></div><form className="chat-form" onSubmit={onSubmit}><input aria-label="聊天消息" placeholder={muted?'你已被主持人禁言':'说点什么，让彼此更近一点…'} maxLength={500} value={value} disabled={muted} onChange={e=>onChange(e.target.value)}/><button aria-label="发送消息" disabled={!value.trim()||busy||muted}><Send size={18}/></button></form><p className="chat-tip"><ShieldCheck size={12}/>文明交流，请勿分享敏感信息</p></aside>;
+ const {locale,t}=useI18n();return <aside className="chat-panel"><div className="chat-header"><h2>{t('chat')}</h2><span>{t('online',{count:state.participants.length})}</span></div><div className="chat-messages"><div className="chat-welcome"><Heart size={21}/><p>{t('welcome')}</p><small>{t('chatWelcome')}</small></div>{state.messages.map(message=><div className={'chat-message '+(message.user_id===userId?'own':'')} key={message.id}><span>{message.name}<small>{new Date(message.created_at).toLocaleTimeString(locale,{hour:'2-digit',minute:'2-digit'})}</small></span><p>{message.body}</p></div>)}<div ref={bottom}/></div><form className="chat-form" onSubmit={onSubmit}><input aria-label={t('chat')} placeholder={muted?t('mutedPlaceholder'):t('chatPlaceholder')} maxLength={500} value={value} disabled={muted} onChange={e=>onChange(e.target.value)}/><button aria-label={t('send')} disabled={!value.trim()||busy||muted}><Send size={18}/></button></form><p className="chat-tip"><ShieldCheck size={12}/>{t('chatTip')}</p></aside>;
 }
 
 function ReportModal({person,onClose,onSubmit}:{person:Participant;onClose:()=>void;onSubmit:(reason:string)=>Promise<void>}){

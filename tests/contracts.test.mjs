@@ -84,18 +84,29 @@ test('television header and participant controls follow the room permission mode
   const stages = room.indexOf('className="header-stage-progress"');
   const actions = room.indexOf('className="theater-actions"');
   assert.ok(title < host && host < stages && stages < actions);
-  for (const label of ['全部关麦', '全部开启麦克风', '全部关闭视频', '全部开启视频']) assert.match(room, new RegExp(label));
+  for (const key of ["t('muteAll')", "t('unmuteAll')", "t('cameraAllOff')", "t('cameraAllOn')"]) assert.match(room, new RegExp(key.replace(/[()']/g,'\\$&')));
   for (const icon of ['MaleSilhouetteIcon', 'FemaleSilhouetteIcon', 'KickGuestIcon', 'Mic', 'Video']) assert.match(room, new RegExp(`<${icon}`));
   assert.doesNotMatch(room, /<Info/);
   assert.match(room, /className="tile-person-button" onClick=\{onProfile\}/);
   assert.match(room, /import\('qrcode'\)/);
-  assert.match(room, /邀请朋友并生成二维码/);
+  assert.match(room, /<LanguageMenu className="room-language"\/>/);
   assert.match(room, /className=\{'tile-lamp /);
   assert.match(room, /<LogOut size=\{20\}/);
   assert.match(css, /flex-wrap:nowrap/);
   assert.match(css, /\.tile-lamp\{position:absolute/);
   assert.match(css, /\.tile-lamp\{left:-2px;top:-2px\}/);
   assert.match(css, /\.tile-lamp\{left:4px;top:4px\}/);
+});
+
+test('international language menu supports Chinese, English, Japanese and Korean', async () => {
+  const i18n = await read('components/i18n.tsx');
+  const shell = await read('components/shell.tsx');
+  const room = await read('components/room.tsx');
+  assert.match(i18n, /'zh-CN','en','ja','ko'/);
+  assert.match(i18n, /xinyu\.locale\.v1/);
+  assert.match(i18n, /🇨🇳/);assert.match(i18n, /🇺🇸/);assert.match(i18n, /🇯🇵/);assert.match(i18n, /🇰🇷/);
+  assert.match(shell, /<LanguageMenu\/>/);
+  assert.match(room, /<LanguageMenu className="room-language"\/>/);
 });
 
 test('sidebar is collapsible and rooms default to a full-width mobile workspace', async () => {

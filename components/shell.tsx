@@ -5,19 +5,21 @@ import {usePathname} from 'next/navigation';
 import {ArrowUpRight,BookOpen,Heart,LogOut,Menu,ShieldCheck,UserRound,Video} from 'lucide-react';
 import {useEffect,useState,type ReactNode} from 'react';
 import {useApp} from './app-provider';
+import {LanguageMenu,useI18n} from './i18n';
 import {Avatar,Rules} from './ui';
 
 export function Shell({children}:{children:ReactNode}){
  const path=usePathname();
  const {user,login,logout,toast}=useApp();
+ const {t}=useI18n();
  const [rules,setRules]=useState(false);
  const [sidebarOpen,setSidebarOpen]=useState(()=>!path.startsWith('/rooms/'));
  const items=[
-  {href:'/',label:'相遇大厅',Icon:Video},
-  {href:'/matches',label:'我的心动',Icon:Heart},
-  {href:'/profile',label:'个人资料',Icon:UserRound},
+  {href:'/',label:t('lobby'),Icon:Video},
+  {href:'/matches',label:t('matches'),Icon:Heart},
+  {href:'/profile',label:t('profile'),Icon:UserRound},
  ];
- const title=path.startsWith('/rooms/')?'相亲房间':items.find(item=>item.href===path)?.label??'相遇大厅';
+ const title=path.startsWith('/rooms/')?t('room'):items.find(item=>item.href===path)?.label??t('lobby');
 
  useEffect(()=>setSidebarOpen(!path.startsWith('/rooms/')),[path]);
  useEffect(()=>{
@@ -30,24 +32,24 @@ export function Shell({children}:{children:ReactNode}){
 
  return <div className={'app-shell '+(sidebarOpen?'sidebar-open':'sidebar-closed')}>
   <aside id="primary-navigation" className="sidebar" aria-hidden={!sidebarOpen} inert={!sidebarOpen?true:undefined}>
-   <Link href="/" className="brand" aria-label="心遇首页"><span className="brand-symbol"><Heart fill="currentColor" strokeWidth={0}/></span><span>心遇<small>X I N Y U</small></span></Link>
-   <div className="sidebar-tagline">每一次相遇，都值得期待</div>
+   <Link href="/" className="brand" aria-label={t('lobby')}><span className="brand-symbol"><Heart fill="currentColor" strokeWidth={0}/></span><span>心遇<small>X I N Y U</small></span></Link>
+   <div className="sidebar-tagline">{t('tagline')}</div>
    <nav>{items.map(({href,label,Icon})=><Link key={href} href={href} className={(path===href||href==='/'&&path.startsWith('/rooms/')?'active':'')}><Icon size={21}/><span>{label}</span>{path===href&&<span className="nav-dot"/>}</Link>)}</nav>
    <div className="sidebar-bottom">
-    <button className="guide-button" onClick={()=>setRules(true)}><BookOpen size={18}/>相遇指南<ArrowUpRight size={15}/></button>
-    <div className="privacy-note"><ShieldCheck size={19}/><span>安心相遇，真诚交友<small>尊重隐私 · 自愿开启音视频</small></span></div>
+    <button className="guide-button" onClick={()=>setRules(true)}><BookOpen size={18}/>{t('guide')}<ArrowUpRight size={15}/></button>
+    <div className="privacy-note"><ShieldCheck size={19}/><span>{t('safe')}<small>{t('privacy')}</small></span></div>
    </div>
   </aside>
   <div className="main-shell">
    <header className="topbar">
     <div className="topbar-leading">
-     <button className="menu-toggle" onClick={()=>setSidebarOpen(value=>!value)} aria-expanded={sidebarOpen} aria-controls="primary-navigation" aria-label={sidebarOpen?'隐藏菜单':'显示菜单'} title="MENU"><Menu size={18}/><span>MENU</span></button>
-     <div className="breadcrumb">发现<span>/</span><strong>{title}</strong></div>
+     <button className="menu-toggle" onClick={()=>setSidebarOpen(value=>!value)} aria-expanded={sidebarOpen} aria-controls="primary-navigation" aria-label="MENU" title="MENU"><Menu size={18}/><span>MENU</span></button>
+     <div className="breadcrumb">{t('discover')}<span>/</span><strong>{title}</strong></div>
     </div>
-    <div className="topbar-right"><span className="topbar-note">给心动，一个机会</span>{user?<><Link className="profile-link" href="/profile"><Avatar name={user.name} photo={user.photos[0]}/><span>{user.name}</span></Link><button className="icon-button" aria-label="退出登录" onClick={()=>logout().catch(error=>toast(error.message))}><LogOut size={17}/></button></>:<button className="login-button" onClick={login}><UserRound size={19}/>登录 / 注册</button>}</div>
+    <div className="topbar-right"><LanguageMenu/><span className="topbar-note">{t('chance')}</span>{user?<><Link className="profile-link" href="/profile"><Avatar name={user.name} photo={user.photos[0]}/><span>{user.name}</span></Link><button className="icon-button" aria-label={t('logout')} onClick={()=>logout().catch(error=>toast(error.message))}><LogOut size={17}/></button></>:<button className="login-button" onClick={login}><UserRound size={19}/>{t('login')}</button>}</div>
    </header>
    <main>{children}</main>
-   <footer className="footer"><span/>仅限18岁及以上 · 尊重每一次相遇<span/></footer>
+   <footer className="footer"><span/>{t('adults')}<span/></footer>
   </div>
   {rules&&<Rules onClose={()=>setRules(false)}/>}
  </div>;
