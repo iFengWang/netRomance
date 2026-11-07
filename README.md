@@ -16,14 +16,14 @@
 - 双向选择：选择只对本人可见，公布后仅互选成功的双方生成牵手记录
 - 房间治理：每个嘉宾窗格公开显示资料、心动灯、麦克风和视频状态；本人及主持人可控制音视频，主持人还可禁言、恢复、移出并拉黑；嘉宾可举报不当行为
 - 响应式设计：桌面、平板和手机均有独立布局；手机端使用底部导航
-- 数据持久化：用户、房间、成员、消息、信令、选择、配对、举报和封禁均存储在 PostgreSQL
+- 数据持久化：本地 Docker 使用 PostgreSQL；Cloudflare 生产环境使用 D1，均保存用户、房间、成员、消息、信令、选择、配对、举报和封禁
 
 ## 技术架构
 
 - Next.js 16 App Router、React 19、TypeScript
-- PostgreSQL 16
+- PostgreSQL 16（本地与 Docker）/ Cloudflare D1（生产）
 - 浏览器原生 WebRTC，HTTP 轮询承载信令和房间状态
-- Docker Compose，Web 与 PostgreSQL 分离
+- Docker Compose 本地部署；Cloudflare Workers + D1 公网部署
 
 WebRTC 本身不规定信令协议，本项目由 Next.js API 保存短时 SDP/ICE 信令。小房间采用 Mesh 拓扑，适合策划要求的 4–6 人场景。公网部署建议配置独立 TURN 服务；单靠 STUN 无法覆盖所有企业网络、对称 NAT 和受限移动网络。
 
@@ -80,24 +80,18 @@ docker compose up -d --build
 
 ## Cloudflare Workers 部署
 
-项目已通过 vinext 兼容性检查，并保留原有 Next.js/Docker 开发方式。生产 Worker 配置位于 `cloudflare.config.ts`，默认绑定自定义域名 `love.ifeng-wang.com`，部署时会自动启用安全 Cookie，并把邀请链接固定为 HTTPS 域名。
+项目已通过 vinext 兼容性检查，并保留原有 Next.js/Docker + PostgreSQL 本地开发方式。生产环境使用 Cloudflare D1，Worker 配置位于 `cloudflare.config.ts`，默认绑定自定义域名 `love.ifeng-wang.com`，启用安全 Cookie，并把邀请链接固定为 HTTPS 域名。
 
-Cloudflare Worker 需要一个可从公网访问的 PostgreSQL 实例。先初始化该数据库：
-
-```bash
-DATABASE_URL='postgresql://user:password@host:5432/database?sslmode=require' npm run db:init
-```
-
-再登录 Cloudflare、设置数据库连接密钥并部署：
+生产数据库 `netromance-db` 位于 Cloudflare D1，初始结构和六个示例房间由 `migrations/0001_init.sql` 管理。首次部署或新增迁移时执行：
 
 ```bash
-npx cf login
-npx cf workers secret put DATABASE_URL
+npx wrangler login
+npm run db:d1:migrate
 npm run build:vinext
 npm run deploy:vinext
 ```
 
-`DATABASE_URL` 不应写入 Git。生产环境建议使用 Cloudflare Hyperdrive 或支持 TLS 的托管 PostgreSQL，并为公网 WebRTC 配置 TURN 服务。
+D1 免费方案的当前额度为每日读取 500 万行、写入 10 万行、账户总存储 5GB；超出免费日限额后查询会暂停到下一个 UTC 日，而不会自动产生费用。公网 WebRTC 仍建议配置 TURN 服务。
 
 TURN 凭据会通过 `/api/ice` 发送给已登录用户。生产环境建议使用短时 TURN 凭据，并在反向代理层增加访问日志、WAF 和速率限制。
 
@@ -134,7 +128,7 @@ curl http://localhost:3210/api/health
 - 每间房由 1 名主持人和 4/6 位嘉宾组成，Mesh 连接上限与策划中的小型相亲房间匹配。更大规模应切换到 SFU（如 LiveKit、Janus 或 mediasoup）。
 - 心跳超过 45 秒即视为离线，离开的用户会在下一次加入时建立全新的信令会话。
 - 信令只保留 2 分钟；聊天历史最多加载最近 100 条，避免轮询响应无限增长。
-- 相册在浏览器内缩放到最长边 800px 并压缩，再存入 PostgreSQL。生产规模扩大后应迁移到对象存储。
+- 相册在浏览器内缩放到最长边 800px 并压缩；本地存入 PostgreSQL，生产存入 D1。生产规模扩大后应迁移到 R2 等对象存储。
 - 房间状态采用约 1.1 秒轮询，部署简单、可直接运行于 Next.js。用户规模扩大后可替换为 WebSocket 或专用实时服务。
 - 主持人进入房间时会请求麦克风权限并默认保持摄像头关闭；嘉宾的音视频均由本人开启。应用不会录制音视频。
 - 主持人的「全部开启」会向嘉宾浏览器发送设备开启请求；若该设备尚未授权，浏览器仍会要求嘉宾本人确认摄像头或麦克风权限。
@@ -148,6 +142,9 @@ lib/api.ts           服务端业务规则、鉴权与数据库操作
 lib/rtc.ts           WebRTC Mesh 连接与信令处理
 scripts/schema.sql   PostgreSQL 数据结构
 scripts/init-db.mjs  幂等数据库初始化与默认房间
+migrations/          Cloudflare D1 生产数据库迁移
+lib/db.d1.ts         D1 查询与 PostgreSQL 兼容适配层
+scripts/wrangler.d1.jsonc  D1 迁移专用 Wrangler 配置
 scripts/deploy.mjs   空闲端口检测、密码生成和 Docker 部署
 design/concept.png   视觉概念稿
 public/images/       生成并优化后的页面图片资产

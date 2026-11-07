@@ -2,8 +2,8 @@ import { NextRequest,NextResponse } from 'next/server';
 import { cookies } from 'next/headers';
 import { randomUUID } from 'node:crypto';
 import { z } from 'zod';
-import type { PoolClient } from 'pg';
-import { db } from './db';
+import { db } from '@/lib/db';
+import type {DbClient} from '@/lib/db-types';
 import { createSession,currentUser,hashToken,passwordHash,publicFields,verifyPassword } from './auth';
 import type {User} from './types';
 class ApiError extends Error {constructor(public status:number,message:string){super(message);}}
@@ -15,10 +15,11 @@ const roomSchema=z.object({title:text(40),description:text(200),city:text(20),ca
 const roomSelect=`SELECT r.*,u.name AS host_name,(SELECT count(*)::int FROM participants p WHERE p.room_id=r.id AND p.role='guest' AND p.last_seen>now()-interval '45 seconds') AS occupancy FROM rooms r LEFT JOIN users u ON u.id=r.host_id`;
 const fields=publicFields.split(',').map(x=>'u.'+x).join(',');
 async function body(req:NextRequest){if(Number(req.headers.get('content-length')||0)>2300000)fail(413,'图片或内容过大');const raw=await req.text();if(raw.length>2300000)fail(413,'图片或内容过大');try{return JSON.parse(raw);}catch{fail(400,'请求格式不正确');}}
-async function limited(key:string,max:number,seconds:number){const r=await db.query(`INSERT INTO rate_limits(key,hits,reset_at) VALUES($1,1,now()+$2*interval '1 second') ON CONFLICT(key) DO UPDATE SET hits=CASE WHEN rate_limits.reset_at<now() THEN 1 ELSE rate_limits.hits+1 END,reset_at=CASE WHEN rate_limits.reset_at<now() THEN now()+$2*interval '1 second' ELSE rate_limits.reset_at END RETURNING hits`,[key,seconds]);if(r.rows[0].hits>max)fail(429,'操作太频繁，请稍后再试');}
-async function transaction<T>(fn:(c:PoolClient)=>Promise<T>){const c=await db.connect();try{await c.query('BEGIN');const r=await fn(c);await c.query('COMMIT');return r;}catch(e){await c.query('ROLLBACK');throw e;}finally{c.release();}}
-async function member(c:PoolClient,roomId:string,userId:string){const r=await c.query(`SELECT * FROM participants WHERE room_id=$1 AND user_id=$2 AND last_seen>now()-interval '45 seconds'`,[roomId,userId]);return r.rows[0]??fail(403,'你已离开房间，请重新加入');}
-async function matches(userId:string,roomId?:string){const {rows}=await db.query(`SELECT m.id,m.created_at,r.title AS room_title,json_build_object(${publicFields.split(',').map(x=>`'${x}',u.${x}`).join(',')}) AS partner FROM matches m JOIN rooms r ON r.id=m.room_id JOIN users u ON u.id=CASE WHEN m.user_a=$1 THEN m.user_b ELSE m.user_a END WHERE (m.user_a=$1 OR m.user_b=$1) ${roomId?'AND m.room_id=$2':''} ORDER BY m.created_at DESC LIMIT 100`,roomId?[userId,roomId]:[userId]);return rows;}
+async function limited(key:string,max:number,seconds:number){const now=new Date().toISOString();const resetAt=new Date(Date.now()+seconds*1000).toISOString();const r=await db.query<{hits:number}>(`INSERT INTO rate_limits(key,hits,reset_at) VALUES($1,1,$2) ON CONFLICT(key) DO UPDATE SET hits=CASE WHEN rate_limits.reset_at<$3 THEN 1 ELSE rate_limits.hits+1 END,reset_at=CASE WHEN rate_limits.reset_at<$3 THEN $2 ELSE rate_limits.reset_at END RETURNING hits`,[key,resetAt,now]);if(r.rows[0].hits>max)fail(429,'操作太频繁，请稍后再试');}
+async function transaction<T>(fn:(c:DbClient)=>Promise<T>){const c=await db.connect();try{await c.query('BEGIN');const r=await fn(c);await c.query('COMMIT');return r;}catch(e){await c.query('ROLLBACK');throw e;}finally{c.release?.();}}
+async function member(c:DbClient,roomId:string,userId:string){const r=await c.query(`SELECT * FROM participants WHERE room_id=$1 AND user_id=$2 AND last_seen>now()-interval '45 seconds'`,[roomId,userId]);return r.rows[0]??fail(403,'你已离开房间，请重新加入');}
+const partnerFields=publicFields.split(',');
+async function matches(userId:string,roomId?:string){const {rows}=await db.query<Record<string,unknown>>(`SELECT m.id,m.created_at,r.title AS room_title,${partnerFields.map(x=>`u.${x} AS partner_${x}`).join(',')} FROM matches m JOIN rooms r ON r.id=m.room_id JOIN users u ON u.id=CASE WHEN m.user_a=$1 THEN m.user_b ELSE m.user_a END WHERE (m.user_a=$1 OR m.user_b=$1) ${roomId?'AND m.room_id=$2':''} ORDER BY m.created_at DESC LIMIT 100`,roomId?[userId,roomId]:[userId]);return rows.map(row=>({id:row.id,created_at:row.created_at,room_title:row.room_title,partner:Object.fromEntries(partnerFields.map(field=>[field,row[`partner_${field}`]]))}));}
 async function handle(req:NextRequest){
  const path=req.nextUrl.pathname.replace(/^\/api\//,'').split('/');const method=req.method;
  if(method!=='GET'){
@@ -72,7 +73,7 @@ async function handle(req:NextRequest){
    db.query('SELECT * FROM (SELECT m.id,m.user_id,u.name,m.body,m.created_at FROM messages m JOIN users u ON u.id=m.user_id WHERE m.room_id=$1 ORDER BY m.id DESC LIMIT 100) t ORDER BY id',[roomId]),
    db.query("SELECT id,sender_id,payload FROM signals WHERE room_id=$1 AND receiver_id=$2 AND id>$3 AND created_at>now()-interval '2 minutes' ORDER BY id LIMIT 200",[roomId,user.id,since]),
    db.query('SELECT target_id FROM choices WHERE room_id=$1 AND round=$2 AND user_id=$3',[roomId,room.round,user.id]),matches(user.id,roomId),
-   room.host_id===user.id?db.query('SELECT r.id,r.reason,r.created_at,u.name FROM reports r LEFT JOIN users u ON u.id=r.target_id WHERE r.room_id=$1 ORDER BY created_at DESC LIMIT 20',[roomId]):Promise.resolve({rows:[]})
+   room.host_id===user.id?db.query('SELECT r.id,r.reason,r.created_at,u.name FROM reports r LEFT JOIN users u ON u.id=r.target_id WHERE r.room_id=$1 ORDER BY r.created_at DESC LIMIT 20',[roomId]):Promise.resolve({rows:[]})
   ]);
   return {room,participants:people.rows,messages:msgs.rows,signals:sigs.rows,signalCursor:sigs.rows.at(-1)?.id??since,choice:choice.rows[0]?.target_id??null,matches:matchRows,reports:reports.rows};
  }
@@ -163,7 +164,7 @@ async function handle(req:NextRequest){
   }
   if(action==='stage'){
    if(room.host_id!==user.id)fail(403,'只有主持人可以推进环节');const expected=z.number().int().min(0).max(4).parse(data.expected);if(expected!==room.stage)fail(409,'环节已更新，请刷新后重试');
-   if(room.stage===0){const n=await c.query("SELECT count(*)::int AS count FROM participants WHERE room_id=$1 AND role='guest' AND last_seen>now()-interval '45 seconds'",[roomId]);if(n.rows[0].count<2)fail(409,'至少需要两位在线嘉宾才能开始');}
+   if(room.stage===0){const n=await c.query<{count:number}>("SELECT CAST(count(*) AS INTEGER) AS count FROM participants WHERE room_id=$1 AND role='guest' AND last_seen>now()-interval '45 seconds'",[roomId]);if(n.rows[0].count<2)fail(409,'至少需要两位在线嘉宾才能开始');}
    if(room.stage===3){
     const pairs=await c.query(`SELECT a.user_id AS a,a.target_id AS b FROM choices a JOIN choices b ON a.user_id=b.target_id AND a.target_id=b.user_id AND a.room_id=b.room_id AND a.round=b.round JOIN participants pa ON pa.room_id=a.room_id AND pa.user_id=a.user_id JOIN participants pb ON pb.room_id=a.room_id AND pb.user_id=a.target_id WHERE a.room_id=$1 AND a.round=$2 AND a.user_id<a.target_id AND pa.last_seen>now()-interval '45 seconds' AND pb.last_seen>now()-interval '45 seconds'`,[roomId,room.round]);
     for(const pair of pairs.rows)await c.query('INSERT INTO matches(id,room_id,round,user_a,user_b) VALUES($1,$2,$3,$4,$5) ON CONFLICT DO NOTHING',[randomUUID(),roomId,room.round,pair.a,pair.b]);

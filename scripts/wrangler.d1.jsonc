@@ -1,0 +1,12 @@
+{
+  "name": "netromance",
+  "compatibility_date": "2026-11-07",
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "netromance-db",
+      "database_id": "626e650e-8d92-494c-9f4b-3b8ecfe950dd",
+      "migrations_dir": "../migrations"
+    }
+  ]
+}

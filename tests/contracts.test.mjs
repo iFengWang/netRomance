@@ -16,6 +16,20 @@ test('database schema covers the complete matchmaking lifecycle', async () => {
   assert.match(schema, /video_enabled boolean NOT NULL DEFAULT false/);
 });
 
+test('Cloudflare production uses D1 with the complete schema and no database secret', async () => {
+  const schema = await read('migrations/0001_init.sql');
+  const config = await read('cloudflare.config.ts');
+  const adapter = await read('lib/db.d1.ts');
+  for (const table of ['users', 'sessions', 'rooms', 'participants', 'messages', 'signals', 'choices', 'matches', 'bans', 'reports', 'rate_limits']) {
+    assert.match(schema, new RegExp(`CREATE TABLE IF NOT EXISTS ${table}\\b`));
+  }
+  assert.match(config, /DB: bindings\.d1/);
+  assert.doesNotMatch(config, /DATABASE_URL/);
+  assert.match(config, /love\.ifeng-wang\.com/);
+  assert.match(adapter, /from 'cloudflare:workers'/);
+  assert.match(adapter, /env\.DB\.prepare/);
+});
+
 test('WebRTC client includes queued ICE, restart and bitrate control', async () => {
   const rtc = await read('lib/rtc.ts');
   assert.match(rtc, /pending:RTCIceCandidateInit\[\]/);

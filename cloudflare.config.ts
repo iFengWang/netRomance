@@ -14,7 +14,10 @@ export default defineConfig({
     },
     env: {
       ASSETS: bindings.assets(),
-      DATABASE_URL: bindings.secret(),
+      DB: bindings.d1({
+        id: "626e650e-8d92-494c-9f4b-3b8ecfe950dd",
+        name: "netromance-db",
+      }),
       COOKIE_SECURE: bindings.text("true"),
       INVITE_BASE_URL: bindings.text("https://love.ifeng-wang.com"),
     },
