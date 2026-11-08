@@ -1,6 +1,5 @@
 'use client';
 
-import {Languages} from 'lucide-react';
 import {createContext,useCallback,useContext,useEffect,useRef,useState,type ReactNode} from 'react';
 
 export const locales=['zh-CN','en','ja','ko'] as const;
@@ -33,5 +32,5 @@ export const useI18n=()=>useContext(I18nContext);
 export function LanguageMenu({className=''}:{className?:string}){
  const {locale,setLocale,t}=useI18n();const [open,setOpen]=useState(false);const ref=useRef<HTMLDivElement>(null);
  useEffect(()=>{if(!open)return;const close=(event:PointerEvent)=>{if(!ref.current?.contains(event.target as Node))setOpen(false);};document.addEventListener('pointerdown',close);return()=>document.removeEventListener('pointerdown',close);},[open]);
- return <div className={'language-switcher '+className} ref={ref}><button className="language-trigger" onClick={()=>setOpen(value=>!value)} aria-label={t('language')} aria-expanded={open} aria-haspopup="menu" title={t('language')}><Languages size={18}/><span aria-hidden="true">{labels[locale].flag}</span></button>{open&&<div className="language-menu" role="menu" aria-label={t('language')}>{locales.map(item=><button key={item} role="menuitemradio" aria-checked={locale===item} className={locale===item?'selected':''} onClick={()=>{setLocale(item);setOpen(false);}}><span>{labels[item].flag}</span><small>{labels[item].label}</small></button>)}</div>}</div>;
+ return <div className={'language-switcher '+className} ref={ref}><button className="language-trigger" onClick={()=>setOpen(value=>!value)} aria-label={t('language')} aria-expanded={open} aria-haspopup="menu" title={t('language')}><span aria-hidden="true">{labels[locale].flag}</span></button>{open&&<div className="language-menu" role="menu" aria-label={t('language')}>{locales.map(item=><button key={item} role="menuitemradio" aria-checked={locale===item} className={locale===item?'selected':''} onClick={()=>{setLocale(item);setOpen(false);}}><span>{labels[item].flag}</span><small>{labels[item].label}</small></button>)}</div>}</div>;
 }
