@@ -30,12 +30,24 @@ test('Cloudflare production uses D1 with the complete schema and no database sec
   assert.match(adapter, /env\.DB\.prepare/);
 });
 
-test('WebRTC client includes queued ICE, restart and bitrate control', async () => {
+test('WebRTC client includes resilient mesh negotiation, queued ICE and recovery', async () => {
   const rtc = await read('lib/rtc.ts');
   assert.match(rtc, /pending:RTCIceCandidateInit\[\]/);
   assert.match(rtc, /createOffer\(\{iceRestart:restart\}\)/);
   assert.match(rtc, /maxBitrate=800000/);
   assert.match(rtc, /addTransceiver/);
+  assert.match(rtc, /iceCandidatePoolSize:10/);
+  assert.match(rtc, /OFFER_TIMEOUT_MS/);
+  assert.match(rtc, /DISCONNECT_GRACE_MS/);
+  assert.match(rtc, /setLocalDescription\(\{type:'rollback'\}\)/);
+  assert.match(rtc, /peer\.pending\.length<128/);
+});
+
+test('ICE endpoint prefers configured TURN and returns multiple STUN fallbacks', async () => {
+ const api = await read('lib/api.ts');
+ assert.match(api, /TURN_URL&&process\.env\.TURN_USERNAME&&process\.env\.TURN_CREDENTIAL/);
+ assert.match(api, /stun1\.l\.google\.com/);
+ assert.match(api, /stun2\.l\.google\.com/);
 });
 
 test('room API transfers or clears host ownership on departure', async () => {

@@ -52,8 +52,11 @@ async function handle(req:NextRequest){
  if(path[0]==='profile'&&method==='PATCH'){const p=profileSchema.parse(await body(req));await db.query('UPDATE users SET name=$2,age=$3,gender=$4,city=$5,occupation=$6,bio=$7,interests=$8,photos=$9 WHERE id=$1',[user.id,p.name,p.age,p.gender,p.city,p.occupation,p.bio,JSON.stringify(p.interests),JSON.stringify(p.photos)]);return {user:await currentUser()};}
  if(path[0]==='matches'&&method==='GET')return {matches:await matches(user.id)};
  if(path[0]==='ice'&&method==='GET'){
-  const iceServers:Record<string,unknown>[]=[{urls:'stun:stun.l.google.com:19302'}];
+  // Keep several independent STUN endpoints. TURN, when configured, is first
+  // so symmetric NAT and restricted mobile/enterprise networks can relay.
+  const iceServers:Record<string,unknown>[]=[];
   if(process.env.TURN_URL&&process.env.TURN_USERNAME&&process.env.TURN_CREDENTIAL)iceServers.push({urls:process.env.TURN_URL.split(','),username:process.env.TURN_USERNAME,credential:process.env.TURN_CREDENTIAL});
+  iceServers.push({urls:'stun:stun.l.google.com:19302'},{urls:'stun:stun1.l.google.com:19302'},{urls:'stun:stun2.l.google.com:19302'});
   return {iceServers};
  }
  if(path[0]==='rooms'&&path.length===1&&method==='POST'){
